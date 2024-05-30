@@ -108,17 +108,22 @@ export class Issues extends GitHubConverter {
     result: DestinationRecord[]
   ): void {
     const issue = record.record.data;
-    const uid = `${issue.id}`;
     const source = this.streamName.source;
     const issueLabelsStream = this.issueLabelsStream.asString;
+
+    const model = issue.pull_request ? 'vcs_PullRequestLabel' : 'tms_TaskTag';
+    const recordKey = issue.pull_request ? 'pullRequest' : 'task';
+    const uid = issue.pull_request
+      ? issue.number.toString()
+      : issue.id.toString();
 
     for (const labelNode of issue.labels) {
       const label = ctx.get(issueLabelsStream, String(labelNode.id));
       const name = label?.record?.data?.name;
       if (!name) continue;
       result.push({
-        model: issue.pull_request ? 'vcs_PullRequestLabel' : 'tms_TaskTag',
-        record: {pullRequest: {uid, source}, label: {name}},
+        model,
+        record: {[recordKey]: {uid, source}, label: {name}},
       });
     }
   }
