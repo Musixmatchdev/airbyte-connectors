@@ -95,6 +95,7 @@ export abstract class AzurePipelineConverter extends Converter {
 
     return {
       name: toLower(parts[1]),
+      uid: toLower(parts[1]),
       organization: {
         uid: toLower(parts[0]),
         source: repo.type,

@@ -17,6 +17,7 @@ export class Issues extends GitHubConverter {
     'tms_TaskBoardRelationship',
     'tms_TaskTag',
     'tms_User',
+    'vcs_PullRequestLabel',
   ];
 
   private readonly issueLabelsStream = new StreamName('github', 'issue_labels');
@@ -25,7 +26,7 @@ export class Issues extends GitHubConverter {
     return [this.issueLabelsStream];
   }
 
-  async convert(
+  private async convertIssue(
     record: AirbyteRecord,
     ctx: StreamContext
   ): Promise<ReadonlyArray<DestinationRecord>> {
@@ -33,13 +34,6 @@ export class Issues extends GitHubConverter {
     const issue = record.record.data;
     const res: DestinationRecord[] = [];
     const uid = `${issue.id}`;
-
-    // GitHub's REST API v3 considers every pull request an issue,
-    // but not every issue is a pull request. Will skip pull requests
-    // since we pull them separately
-    if (issue.pull_request) {
-      return res;
-    }
 
     const user = GitHubCommon.tms_User(issue?.user, source);
     if (user) res.push(user);
@@ -58,16 +52,7 @@ export class Issues extends GitHubConverter {
       }
     });
 
-    const issueLabelsStream = this.issueLabelsStream.asString;
-    for (const labelNode of issue.labels) {
-      const label = ctx.get(issueLabelsStream, String(labelNode.id));
-      const name = label?.record?.data?.name;
-      if (!name) continue;
-      res.push({
-        model: 'tms_TaskTag',
-        record: {task: {uid, source}, label: {name}},
-      });
-    }
+    this.convertLabels(record, ctx, res);
 
     // Github issues only have state either open or closed
     const category = issue.state === 'open' ? 'Todo' : 'Done';
@@ -104,5 +89,50 @@ export class Issues extends GitHubConverter {
     });
 
     return res;
+  }
+
+  private async convertPullRequest(
+    record: AirbyteRecord,
+    ctx: StreamContext
+  ): Promise<ReadonlyArray<DestinationRecord>> {
+    const res: DestinationRecord[] = [];
+
+    this.convertLabels(record, ctx, res);
+
+    return res;
+  }
+
+  private convertLabels(
+    record: AirbyteRecord,
+    ctx: StreamContext,
+    result: DestinationRecord[]
+  ): void {
+    const issue = record.record.data;
+    const uid = `${issue.id}`;
+    const source = this.streamName.source;
+    const issueLabelsStream = this.issueLabelsStream.asString;
+
+    for (const labelNode of issue.labels) {
+      const label = ctx.get(issueLabelsStream, String(labelNode.id));
+      const name = label?.record?.data?.name;
+      if (!name) continue;
+      result.push({
+        model: issue.pull_request ? 'vcs_PullRequestLabel' : 'tms_TaskTag',
+        record: {pullRequest: {uid, source}, label: {name}},
+      });
+    }
+  }
+
+  async convert(
+    record: AirbyteRecord,
+    ctx: StreamContext
+  ): Promise<ReadonlyArray<DestinationRecord>> {
+    const issue = record.record.data;
+
+    if (issue.pull_reuqest) {
+      return this.convertPullRequest(record, ctx);
+    } else {
+      return this.convertIssue(record, ctx);
+    }
   }
 }
