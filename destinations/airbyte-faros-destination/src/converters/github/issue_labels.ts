@@ -4,7 +4,10 @@ import {DestinationModel, DestinationRecord} from '../converter';
 import {GitHubConverter} from './common';
 
 export class IssueLabels extends GitHubConverter {
-  readonly destinationModels: ReadonlyArray<DestinationModel> = ['tms_Label'];
+  readonly destinationModels: ReadonlyArray<DestinationModel> = [
+    'tms_Label',
+    'vsc_Label',
+  ];
 
   async convert(
     record: AirbyteRecord
@@ -13,6 +16,10 @@ export class IssueLabels extends GitHubConverter {
     return [
       {
         model: 'tms_Label',
+        record: {name: label.name},
+      },
+      {
+        model: 'vcs_Label',
         record: {name: label.name},
       },
     ];
